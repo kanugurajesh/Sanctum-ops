@@ -54,7 +54,7 @@ export default function Sidebar({ users, currentId, onSelect, me, open, onClose 
           <path d="M19 19l5 5" stroke="#8fa3ff" strokeWidth="2.2" strokeLinecap="round" />
         </svg>
         <div className="min-w-0">
-          <div className="text-[15px] font-bold leading-tight">HMS Ops Agent</div>
+          <div className="text-[15px] font-bold leading-tight">Sanctum Ops</div>
           <div className="text-xs text-ink-2">Checked before anything runs</div>
         </div>
         <button onClick={onClose} className="ml-auto rounded-md p-1.5 text-ink-2 hover:bg-paper md:hidden" aria-label="Close user list">

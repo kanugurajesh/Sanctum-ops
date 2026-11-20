@@ -7,7 +7,7 @@ from app.api.routes import router
 
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="HMS Permission-Aware Operations Agent", version="1.0.0")
+app = FastAPI(title="Sanctum Ops — Permission-Aware Operations Agent", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:8080"],

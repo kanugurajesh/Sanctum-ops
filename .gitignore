@@ -18,3 +18,7 @@ dist/
 
 # tooling
 .playwright-mcp/
+
+# demo recording artifacts
+scripts/demo/video/
+scripts/demo/cuts.json
