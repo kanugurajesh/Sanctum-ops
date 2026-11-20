@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* Case-sheet palette: green-grey paper, green-black ink, ballpoint blue reserved for signing off a change. */
+@theme {
+  --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
+
+  --color-paper: #e9eeea;
+  --color-sheet: #fafbf9;
+  --color-ink: #17302b;
+  --color-ink-2: #546863;
+  --color-rule: #cfd9d4;
+  --color-rule-soft: #e2e9e5;
+
+  --color-pen: #2537a6;
+  --color-pen-deep: #1b2a84;
+  --color-pen-wash: #e9ecf8;
+
+  --color-stamp: #b3362c;
+  --color-stamp-wash: #f8e9e6;
+  --color-ok: #1f7049;
+  --color-ok-wash: #e3f0e8;
+  --color-caution: #8f5a00;
+  --color-caution-wash: #f5ecd8;
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--color-pen-wash); color: var(--color-pen-deep); }
+
+:focus-visible {
+  outline: 2px solid var(--color-pen);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.tnum { font-variant-numeric: tabular-nums; }
+
+.scroll-thin { scrollbar-width: thin; scrollbar-color: var(--color-rule) transparent; }
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: var(--color-rule); border-radius: 8px; }
+
+/* The one orchestrated moment: a new agent entry settles in, so a fresh reply is easy to spot. */
+@keyframes entry-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.entry-in { animation: entry-in 220ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .entry-in { animation: none; }
+  * { scroll-behavior: auto !important; }
+}

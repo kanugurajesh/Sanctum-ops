@@ -1,0 +1,20 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# node / build
+node_modules/
+dist/
+*.tsbuildinfo
+
+# eval output
+**/eval/results*.json
+
+# tooling
+.playwright-mcp/
