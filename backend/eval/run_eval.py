@@ -1,5 +1,5 @@
 """Eval harness: runs labelled queries through the REAL pipeline (LLM + policy + DB) and reports
-intent accuracy, false-allow rate and false-deny rate. Uses LLM_PROVIDER (groq | gemini). Previews are cancelled, never confirmed,
+intent accuracy, false-allow rate and false-deny rate. Uses LLM_PROVIDER (groq | gemini | qwen). Previews are cancelled, never confirmed,
 so running it changes no business data.
 
     docker compose exec api python -m eval.run_eval [--limit N] [--lang en,te,hi] [--out eval/results.json]
@@ -44,7 +44,9 @@ def main() -> int:
     args = ap.parse_args()
 
     s = get_settings()
-    if not (s.groq_api_key if s.llm_provider.lower() == "groq" else s.gemini_api_key):
+    provider = s.llm_provider.lower()
+    keys = {"groq": s.groq_api_key, "gemini": s.gemini_api_key}
+    if provider in keys and not keys[provider]:   # qwen runs locally and needs no key
         print(f"No API key for LLM_PROVIDER={s.llm_provider}; the eval needs the real model.", file=sys.stderr)
         return 2
 
@@ -121,7 +123,7 @@ def main() -> int:
         },
         "still_rate_limited": sum(r["rate_limited"] for r in results),
         "provider": s.llm_provider,
-        "model": s.groq_model if s.llm_provider.lower() == "groq" else s.gemini_model,
+        "model": {"groq": s.groq_model, "gemini": s.gemini_model, "qwen": s.qwen_model}.get(provider),
     }
     print("\n" + json.dumps(summary, indent=2))
     Path(args.out).write_text(json.dumps({"summary": summary, "results": results}, indent=2), encoding="utf-8")

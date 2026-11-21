@@ -1,0 +1,12 @@
+# Training-only dependencies (never installed in the API image).
+# Install torch first with the CUDA index, see training/README.md:
+#   pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+transformers==5.23.0
+peft==0.22.0
+trl==1.18.2
+datasets==5.2.0
+accelerate==1.16.0
+pyyaml==6.0.4
+# for merge_and_export.py --llama-cpp (GGUF for Ollama): pip install <llama.cpp>/gguf-py sentencepiece
+# optional, only for train_sft.py --qlora:
+# bitsandbytes

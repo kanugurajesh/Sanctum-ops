@@ -11,7 +11,7 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from app.agent.intent import ParsedIntent
-from app.agent.prompts import FEW_SHOTS, SYSTEM_PROMPT
+from app.agent.prompts import FEW_SHOTS, QWEN_SYSTEM_PROMPT, SYSTEM_PROMPT
 from app.config import get_settings
 
 log = logging.getLogger(__name__)
@@ -125,19 +125,28 @@ GENERATION_RETRY_PAUSE_S = 1.5
 
 class GroqParser:
     """Groq (OpenAI-compatible chat completions), default model openai/gpt-oss-120b.
-    Uses JSON-schema structured output; the reply is still validated by Pydantic."""
+    Uses JSON-schema structured output; the reply is still validated by Pydantic.
+    QwenParser below reuses this request/validation loop against a local server."""
 
     URL = "https://api.groq.com/openai/v1/chat/completions"
+    SYSTEM_PROMPT = SYSTEM_PROMPT
+    FEW_SHOTS = FEW_SHOTS
+    EXTRA_BODY: dict = {"reasoning_effort": "low"}
+    RESPONSE_FORMAT: dict = {
+        "type": "json_schema",
+        "json_schema": {"name": "parsed_intent", "schema": INTENT_JSON_SCHEMA},
+    }
 
     def __init__(self, api_key: str | None = None, model: str | None = None):
         settings = get_settings()
+        self.url = self.URL
         self.api_key = api_key or settings.groq_api_key
         self.model = model or settings.groq_model
         self.timeout = settings.llm_timeout_seconds
 
     def _messages(self, text: str, history: list[Turn]) -> list[dict]:
-        msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for q, a in FEW_SHOTS:
+        msgs = [{"role": "system", "content": self.SYSTEM_PROMPT}]
+        for q, a in self.FEW_SHOTS:
             msgs += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
         for t in history[-6:]:
             if t.role == "user":
@@ -147,22 +156,28 @@ class GroqParser:
         msgs.append({"role": "user", "content": text[:2000]})
         return msgs
 
+    def _check_ready(self) -> None:
+        if not self.api_key:
+            raise ParserError("GROQ_API_KEY is not set. Add it to .env and restart the api container.")
+
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {self.api_key}"}
+
+    def _unreachable(self, e: Exception) -> ParserError:
+        return ParserError(f"The language model could not be reached ({type(e).__name__}). Please try again.")
+
     def parse(self, text: str, history: list[Turn]) -> ParsedIntent:
         import httpx
 
-        if not self.api_key:
-            raise ParserError("GROQ_API_KEY is not set. Add it to .env and restart the api container.")
+        self._check_ready()
         body = {
             "model": self.model,
             "messages": self._messages(text, history),
             "temperature": 0,
-            "reasoning_effort": "low",
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {"name": "parsed_intent", "schema": INTENT_JSON_SCHEMA},
-            },
+            **self.EXTRA_BODY,
+            "response_format": self.RESPONSE_FORMAT,
         }
-        headers = {"Authorization": f"Bearer {self.api_key}"}
+        headers = self._headers()
         # Groq's schema-constrained generation sometimes fails (json_validate_failed,
         # output_parse_failed); for some requests it fails every time. Recover what we can from the
         # rejected output; otherwise retry in plain JSON mode, where the reply is validated only by
@@ -199,13 +214,12 @@ class GroqParser:
         resp = None
         for attempt in range(3):
             try:
-                resp = httpx.post(self.URL, json=body, headers=headers, timeout=self.timeout)
+                resp = httpx.post(self.url, json=body, headers=headers, timeout=self.timeout)
             except httpx.HTTPError as e:
                 if attempt < 2 and isinstance(e, (httpx.ConnectError, httpx.ReadTimeout)):
                     time.sleep(1.0)   # transient network blip: retry
                     continue
-                raise ParserError(f"The language model could not be reached ({type(e).__name__}). "
-                                  "Please try again.") from e
+                raise self._unreachable(e) from e
             if resp.status_code == 429 and attempt < 2:
                 # Free tier is ~8k tokens/min; wait out the window Groq reports (bounded).
                 try:
@@ -227,6 +241,46 @@ class GroqParser:
             raise ParserError(f"Groq model '{self.model}' was not found. Check GROQ_MODEL in .env.")
         if resp.status_code >= 400:
             raise ParserError(f"The language model returned an error ({resp.status_code}). Please try again.")
+
+
+class QwenParser(GroqParser):
+    """Optional local model: a fine-tuned Qwen (training/) served by Ollama's OpenAI-compatible
+    endpoint. Same retry, salvage and Pydantic validation as Groq; differences: no API key, a short
+    prompt with no few-shots (the format was learned in fine-tuning, with this exact prompt), no
+    `reasoning_effort`, and plain JSON mode instead of JSON-schema mode. Ollama's grammar for our
+    schema blocks optional nested fields (date_range, discount_pct...) and pushes the model into
+    wrong ones, while the fine-tuned model writes the schema correctly unconstrained. Every reply
+    is still validated against ParsedIntent, as for every provider."""
+
+    SYSTEM_PROMPT = QWEN_SYSTEM_PROMPT
+    FEW_SHOTS: list[tuple[str, str]] = []
+    EXTRA_BODY: dict = {}
+    RESPONSE_FORMAT: dict = {"type": "json_object"}
+
+    def __init__(self, base_url: str | None = None, model: str | None = None):
+        settings = get_settings()
+        self.base_url = (base_url or settings.qwen_base_url).rstrip("/")
+        self.url = f"{self.base_url}/chat/completions"
+        self.api_key = ""
+        self.model = model or settings.qwen_model
+        self.timeout = settings.llm_timeout_seconds
+
+    def _check_ready(self) -> None:
+        pass
+
+    def _headers(self) -> dict:
+        return {}
+
+    def _unreachable(self, e: Exception) -> ParserError:
+        return ParserError(f"The local Qwen model is not reachable at {self.base_url} ({type(e).__name__}). "
+                           "Start Ollama, or set LLM_PROVIDER=groq in .env.")
+
+    def _raise_for_status(self, resp) -> None:
+        if resp.status_code == 404:
+            raise ParserError(f"Local model '{self.model}' was not found in Ollama. "
+                              "Create it with the steps in training/README.md, or check QWEN_MODEL in .env.")
+        if resp.status_code >= 400:
+            raise ParserError(f"The local Qwen model returned an error ({resp.status_code}). Please try again.")
 
 
 def _error_body(resp) -> dict:
@@ -264,7 +318,9 @@ def make_parser() -> IntentParser:
         return GeminiParser()
     if provider == "groq":
         return GroqParser()
-    raise ValueError(f"Unknown LLM_PROVIDER {provider!r} (use 'groq' or 'gemini')")
+    if provider == "qwen":
+        return QwenParser()
+    raise ValueError(f"Unknown LLM_PROVIDER {provider!r} (use 'groq', 'gemini' or 'qwen')")
 
 
 class StaticParser:

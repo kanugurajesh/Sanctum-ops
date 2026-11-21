@@ -16,6 +16,13 @@ dist/
 # eval output
 **/eval/results*.json
 
+# fine-tuning (optional local Qwen): data, caches and weights stay local
+training/.venv/
+training/.hf_cache/
+training/.llama.cpp/
+training/data/
+training/outputs/
+
 # tooling
 .playwright-mcp/
 

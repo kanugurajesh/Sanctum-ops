@@ -30,6 +30,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Only used by the optional LLM_PROVIDER=qwen (Ollama on the host). Docker Desktop
+    # defines this name already; the line makes it work on Linux Docker too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     command: sh -c "python -m app.db.migrate && uvicorn app.main:app --host 0.0.0.0 --port 8000"

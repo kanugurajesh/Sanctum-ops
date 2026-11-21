@@ -275,6 +275,13 @@ The LLM sees only the user's own words and our own clarifying questions — neve
   - Live result (`--lang te,hi`, Groq `openai/gpt-oss-120b`): 20/20 correct outcomes, 0 false allows, 0 false
     denies. One query first failed with a network `ConnectError` and passed when rerun. The English set
     (`--lang en`) still scores 59/59 outcomes (intent accuracy 0.983) with 0 false allows after the prompt change.
+- **Optional local parser (`LLM_PROVIDER=qwen`)**: Qwen2.5-0.5B-Instruct fine-tuned with LoRA to emit the same
+  intent JSON, served by Ollama. Query text stays on the machine, with no API key and no rate limits. It plugs
+  in behind the same `IntentParser` interface (`QwenParser` reuses Groq's request, salvage and validation
+  code), so policy and execution are unchanged. Groq remains the default. LoRA-trained in about 45 min on a
+  4 GB RTX 3050 Laptop. On the full eval (all 79 queries held out of training, fresh seed) it scored 79/79
+  outcomes with 0 false allows and 0 false denies, at a median of 0.22 s per query. The dataset builder,
+  training steps and what changed between training rounds are in [training/README.md](training/README.md).
 
 ---
 
@@ -320,10 +327,11 @@ Language understanding is measured separately with the real model: `python -m ev
 
 | Variable | Default | |
 |---|---|---|
-| `LLM_PROVIDER` | `groq` | `groq` or `gemini` |
+| `LLM_PROVIDER` | `groq` | `groq`, `gemini`, or `qwen` (optional local model) |
 | `GROQ_API_KEY` | — | required when `LLM_PROVIDER=groq` |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | any Groq model with JSON-schema output |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | — / `gemini-2.5-flash` | only when `LLM_PROVIDER=gemini` |
+| `QWEN_BASE_URL` / `QWEN_MODEL` | `http://host.docker.internal:11434/v1` / `hms-intent-qwen` | only when `LLM_PROVIDER=qwen`; see [training/README.md](training/README.md) |
 | `JWT_SECRET` | dev value | change outside local demos |
 | `DEMO_MODE` | `true` | enables the role switcher and shared demo password; set `false` before real use |
 
@@ -356,7 +364,7 @@ Language understanding is measured separately with the real model: `python -m ev
 
 ```
 backend/
-  app/agent/        Groq + Gemini parsers, intent schema, prompt
+  app/agent/        Groq + Gemini (+ optional local Qwen) parsers, intent schema, prompts
   app/operations/   Operation model, normalize (intent → operation), IST dates
   app/policy/       permissions math, policy engine (pure)
   app/execution/    query builders, dry-run plans, executor, read answers, directory
@@ -366,4 +374,5 @@ backend/
   tests/            pytest (no LLM)
   eval/             labelled queries + runner (real LLM)
 frontend/           React UI (served by nginx, proxies /api)
+training/           optional: dataset builder + LoRA fine-tuning of the local Qwen parser
 ```
