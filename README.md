@@ -297,6 +297,8 @@ Language understanding is measured separately with the real model: `python -m ev
   model plus six few-shots; there is no translation layer, so unusual dialect or spelling can still be misread.
   A misread intent hits the same policy checks as any other, but if the user is allowed to do the misread
   thing, only the (English) preview stands between it and a commit.
+- Gemini (`LLM_PROVIDER=gemini`) is supported, but the eval was not re-run with it after the Telugu/Hinglish
+  prompt change. All accuracy numbers in this README are from Groq `openai/gpt-oss-120b`.
 - The ₹ impact is shown in every preview but not limited: guards count rows and percentages, not rupees.
   Undo covers only the user's most recent change, and only while nobody has touched those rows since.
 - Language coverage is the supported operations only (inventory query/update/delete, bill query/discount/status,
