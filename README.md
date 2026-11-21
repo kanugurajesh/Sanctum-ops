@@ -253,6 +253,8 @@ docker compose exec api pytest
 - `tests/test_write_safety.py` — crash mid-transaction rolls back, stale preview rejected, typed count,
   only the previewer can confirm, permission revoked between preview and confirm, RLS (including fail-closed
   with no tenant set), append-only audit, own-records-only, undo, approval routing, audit completeness.
+- `tests/test_multilingual.py` — Telugu/Hinglish requests get the same previews and refusals as English;
+  hospital names in Telugu/Devanagari script fail closed as cross-tenant.
 - `tests/test_dates.py` — IST resolution (e.g. 20:00 UTC on 31 Oct is 1 Nov in IST), month/week boundaries.
 
 Tests use a separate `hms_test` database on the same server.
@@ -285,19 +287,25 @@ Language understanding is measured separately with the real model: `python -m ev
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | any Groq model with JSON-schema output |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | — / `gemini-2.5-flash` | only when `LLM_PROVIDER=gemini` |
 | `JWT_SECRET` | dev value | change outside local demos |
+| `DEMO_MODE` | `true` | enables the role switcher and shared demo password; set `false` before real use |
 
 ## Honest limits
 - On Groq's free tier the model allows ~3 requests/minute sustained (8k tokens/min, ~2.4k tokens per request,
   mostly the system prompt and few-shot examples). The parser waits out short rate-limit windows (≤20 s) and
   otherwise returns a clear "rate-limited, try again" message. Nothing is ever written on an LLM failure.
 - Replies are in English even when the request is in Telugu or Hinglish. Telugu/Hinglish accuracy comes from the
-  model plus six few-shots; there is no translation layer, so unusual dialect or spelling can still be misread
-  (it then hits the same policy checks as any other intent).
+  model plus six few-shots; there is no translation layer, so unusual dialect or spelling can still be misread.
+  A misread intent hits the same policy checks as any other, but if the user is allowed to do the misread
+  thing, only the (English) preview stands between it and a commit.
+- The ₹ impact is shown in every preview but not limited: guards count rows and percentages, not rupees.
+  Undo covers only the user's most recent change, and only while nobody has touched those rows since.
 - Language coverage is the supported operations only (inventory query/update/delete, bill query/discount/status,
   users and access, undo, approvals). Anything else is refused as "not supported", never improvised.
 - The demo login has no real password policy and the role switcher endpoint exposes the user directory
   (disabled with `DEMO_MODE=false`).
-- See [DESIGN_NOTE.md](DESIGN_NOTE.md) for the ways this can still go wrong.
+- See [DESIGN_NOTE.md](DESIGN_NOTE.md) for the three ways this can still go wrong and what to do next:
+  a permitted write hitting the wrong rows after a mis-parse (wider with Telugu/Hinglish), money impact that is
+  shown but not capped, and role/override semantics that can widen access more than admins expect.
 
 ## Project layout
 
