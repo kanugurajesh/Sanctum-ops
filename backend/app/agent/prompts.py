@@ -94,6 +94,8 @@ FEW_SHOTS: list[tuple[str, str]] = [
      '{"action":"inventory.query","low_stock":true,"mode":"summary"}'),
     ("Delete all bills",
      '{"action":"bills.delete","scope_all":true,"requested_permission":"bills.delete"}'),
+    ("Approve request 3",
+     '{"action":"approvals.approve","approval_request_id":3}'),
     # Telugu / Hinglish: same intents as the English versions, string values in Latin script.
     ("Last month bills ki 20% discount ivvu",
      '{"action":"bills.discount","scope_all":true,"discount_pct":20,"date_range":{"preset":"last_month"}}'),

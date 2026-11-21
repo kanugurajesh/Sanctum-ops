@@ -3,6 +3,7 @@ clarifying questions; it never sees database rows, identities or permissions."""
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Protocol
@@ -12,6 +13,8 @@ from pydantic import ValidationError
 from app.agent.intent import ParsedIntent
 from app.agent.prompts import FEW_SHOTS, SYSTEM_PROMPT
 from app.config import get_settings
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -116,6 +119,10 @@ def _inline_refs(schema: dict) -> dict:
 INTENT_JSON_SCHEMA = _inline_refs(ParsedIntent.model_json_schema())
 
 
+GENERATION_ERRORS = {"json_validate_failed", "output_parse_failed"}
+GENERATION_RETRY_PAUSE_S = 1.5
+
+
 class GroqParser:
     """Groq (OpenAI-compatible chat completions), default model openai/gpt-oss-120b.
     Uses JSON-schema structured output; the reply is still validated by Pydantic."""
@@ -156,6 +163,37 @@ class GroqParser:
             },
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
+        # Groq's generation of the structured output occasionally fails (json_validate_failed,
+        # output_parse_failed) even at temperature 0, and the same request usually succeeds when
+        # repeated. So: recover what we can from the rejected output, else retry with a short pause.
+        attempts = 3
+        for attempt in range(attempts):
+            last = attempt == attempts - 1
+            if attempt:
+                time.sleep(GENERATION_RETRY_PAUSE_S * attempt)
+            resp = self._post(httpx, body, headers)
+            if resp.status_code == 400:
+                err = _error_body(resp)
+                log.warning("Groq 400 (%s) on attempt %d: %s", err.get("code"), attempt + 1,
+                            (err.get("message") or "")[:200])
+                intent = _salvage(err.get("failed_generation"))
+                if intent is not None:
+                    return intent
+                if not last:
+                    continue
+                if err.get("code") in GENERATION_ERRORS:
+                    raise ParserError("I couldn't understand that request. Could you rephrase it?")
+            self._raise_for_status(resp)
+            try:
+                content = resp.json()["choices"][0]["message"]["content"] or "{}"
+                return ParsedIntent.model_validate(json.loads(content))
+            except (KeyError, IndexError, ValidationError, json.JSONDecodeError) as e:
+                if not last:
+                    continue
+                raise ParserError("I couldn't understand that request. Could you rephrase it?") from e
+        raise ParserError("I couldn't understand that request. Could you rephrase it?")
+
+    def _post(self, httpx, body: dict, headers: dict):
         resp = None
         for attempt in range(3):
             try:
@@ -175,6 +213,9 @@ class GroqParser:
                 time.sleep(min(max(wait, 1.0), 20.0))
                 continue
             break
+        return resp
+
+    def _raise_for_status(self, resp) -> None:
         if resp.status_code == 429:
             raise ParserError("The language model is rate-limited right now (API quota). "
                               "Please wait a few seconds and try again.")
@@ -184,11 +225,35 @@ class GroqParser:
             raise ParserError(f"Groq model '{self.model}' was not found. Check GROQ_MODEL in .env.")
         if resp.status_code >= 400:
             raise ParserError(f"The language model returned an error ({resp.status_code}). Please try again.")
+
+
+def _error_body(resp) -> dict:
+    try:
+        return resp.json().get("error") or {}
+    except (ValueError, AttributeError):
+        return {}
+
+
+def _salvage(failed_generation: str | None) -> ParsedIntent | None:
+    """Groq rejects output that does not match the schema and returns it as `failed_generation`.
+    A common failure is two JSON objects back to back (a draft, then the real answer). Take the
+    last object that validates against ParsedIntent; it is still only a proposal that code checks."""
+    if not failed_generation:
+        return None
+    decoder = json.JSONDecoder()
+    found, i = None, 0
+    while (start := failed_generation.find("{", i)) != -1:
         try:
-            content = resp.json()["choices"][0]["message"]["content"] or "{}"
-            return ParsedIntent.model_validate(json.loads(content))
-        except (KeyError, IndexError, ValidationError, json.JSONDecodeError) as e:
-            raise ParserError("I couldn't understand that request. Could you rephrase it?") from e
+            obj, end = decoder.raw_decode(failed_generation, start)
+        except json.JSONDecodeError:
+            i = start + 1
+            continue
+        try:
+            found = ParsedIntent.model_validate(obj)
+        except ValidationError:
+            pass
+        i = end
+    return found
 
 
 def make_parser() -> IntentParser:
