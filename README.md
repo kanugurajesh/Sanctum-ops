@@ -101,7 +101,7 @@ Tests run the same way from `backend/` with `pytest` (they create and use a sepa
 | Command | What it does |
 |---|---|
 | `docker compose exec api python -m app.seed` | Reset all data to the deterministic demo seed |
-| `docker compose exec api pytest` | 117 tests: policy (pure), the 12 scenarios end to end, write safety, RLS, Telugu/Hinglish |
+| `docker compose exec api pytest` | 118 tests: policy (pure), the 12 scenarios end to end, write safety, RLS, Telugu/Hinglish |
 | `docker compose exec api python -m eval.run_eval` | 79 labelled queries (59 English, 20 Telugu/Hinglish) through the real LLM |
 
 ### Demo users

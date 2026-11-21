@@ -78,6 +78,22 @@ def test_cancel_writes_nothing_but_is_audited(orch, fresh_db):
         orch.confirm(p, r.preview.operation_id, typed_count=None)
 
 
+def test_wrong_typed_count_is_refused_and_audited(orch, fresh_db):
+    p = principal(ADMIN_A)
+    r = orch.handle(p, "Set all inventory quantities to 5")
+    n = r.preview.rows_affected
+    assert r.preview.requires_typed_count
+    for wrong in (None, n - 1):
+        with pytest.raises(ConfirmError):
+            orch.confirm(p, r.preview.operation_id, typed_count=wrong)
+    assert owner_scalar(
+        "SELECT count(*) FROM audit_log WHERE request_id=:r AND decision='refused' AND reason_code='typed_count_mismatch'",
+        r=r.request_id) == 2
+    assert owner_scalar("SELECT count(*) FROM inventory_items WHERE hospital_id=1 AND quantity <> 5") == n
+    # the preview stays pending, so the right count still works
+    assert orch.confirm(p, r.preview.operation_id, typed_count=n).type == "executed"
+
+
 def test_small_write_needs_no_typed_count(orch, fresh_db):
     p = principal(ADMIN_A)
     r = orch.handle(p, "Set paracetamol quantity to 77")

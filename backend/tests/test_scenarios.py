@@ -84,7 +84,8 @@ def test_s1_admin_same_query_previews_confirms_executes_logs(orch, fresh_db):
     assert owner_scalar("SELECT count(*) FROM inventory_items WHERE hospital_id=1 AND quantity <> 5") == 0
     assert owner_scalar("SELECT count(*) FROM inventory_items WHERE hospital_id=2 AND quantity = 5") < 50  # B untouched
     rows = audit_rows(r.request_id)
-    assert [x["decision"] for x in rows] == ["previewed", "executed"]
+    # the two wrong-count attempts above are audited too
+    assert [x["decision"] for x in rows] == ["previewed", "refused", "refused", "executed"]
     ex = rows[-1]
     assert ex["rows_affected"] == expected and ex["raw_query"] and ex["parsed_intent"]["action"] == "inventory.update"
     assert len(ex["before_snapshot"]["rows"]) == expected and len(ex["after_snapshot"]["rows"]) == expected

@@ -323,18 +323,27 @@ class Orchestrator:
 
     def confirm(self, p: Principal, operation_id: UUID, typed_count: int | None) -> AgentResponse:
         """Re-validates with the *current* session principal and data, then executes atomically."""
+        typed_count_error = None
         with tenant_tx(p.hospital_id) as conn:
             row = self._load_pending(conn, p, operation_id)
             if row["requires_typed_count"] and typed_count != row["expected_count"]:
-                raise ConfirmError(
-                    f"This change affects {row['expected_count']} rows. Type exactly {row['expected_count']} to confirm.")
-            if row["expires_at"] < datetime.now(tz=timezone.utc):
+                # Audit the failed attempt, then raise after this transaction commits (raising inside
+                # it would roll the audit row back). The preview stays pending so the user can retry.
+                n = row["expected_count"]
+                record(conn, p, request_id=row["request_id"], raw_query=row["raw_query"], decision="refused",
+                       action=row["action"], parsed_intent=row["parsed_intent"], operation_id=operation_id,
+                       reason=f"typed count {typed_count!r} did not match {n} rows; nothing written",
+                       reason_code="typed_count_mismatch")
+                typed_count_error = f"This change affects {n} rows. Type exactly {n} to confirm."
+            elif row["expires_at"] < datetime.now(tz=timezone.utc):
                 conn.execute(update(pending_operations).where(pending_operations.c.id == operation_id)
                              .values(status="expired", resolved_at=datetime.now(tz=timezone.utc)))
                 record(conn, p, request_id=row["request_id"], raw_query=row["raw_query"], decision="expired",
                        action=row["action"], operation_id=operation_id, reason="preview expired before confirmation")
                 return AgentResponse(type="error", request_id=row["request_id"],
                                      message="This preview has expired. Please send the request again.")
+        if typed_count_error:
+            raise ConfirmError(typed_count_error)
 
         ctx = Ctx(p=p, request_id=row["request_id"], raw=row["raw_query"], intent=row["parsed_intent"])
         op = Operation.model_validate(row["operation"])
