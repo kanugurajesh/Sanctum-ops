@@ -99,6 +99,14 @@ async function waitForReply(before) {
   if (now() - s > MAX_MODEL_WAIT_S + 1) cut(s + MAX_MODEL_WAIT_S, now() - 0.4);
 }
 
+// Stop the take at the first LLM failure instead of recording (and paying for) a broken demo.
+async function assertNoLLMError(what) {
+  const t = await lastArticle().innerText();
+  if (/The language model|couldn't understand that request|Something went wrong/i.test(t)) {
+    throw new Error(`LLM error after "${what}", aborting take: ${t.slice(0, 200)}`);
+  }
+}
+
 async function ask(text) {
   await pace();
   const before = await articles().count();
@@ -109,6 +117,7 @@ async function ask(text) {
   await page.keyboard.press("Enter");
   await waitForReply(before);
   lastLLM = Date.now();
+  await assertNoLLMError(text);
 }
 
 async function clickLLM(locator) {
@@ -117,6 +126,7 @@ async function clickLLM(locator) {
   await locator.click();
   await waitForReply(before);
   lastLLM = Date.now();
+  await assertNoLLMError("button click");
 }
 
 async function clickReply(locator) {
