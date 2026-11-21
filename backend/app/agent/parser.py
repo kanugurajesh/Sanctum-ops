@@ -163,14 +163,16 @@ class GroqParser:
             },
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
-        # Groq's generation of the structured output occasionally fails (json_validate_failed,
-        # output_parse_failed) even at temperature 0, and the same request usually succeeds when
-        # repeated. So: recover what we can from the rejected output, else retry with a short pause.
+        # Groq's schema-constrained generation sometimes fails (json_validate_failed,
+        # output_parse_failed); for some requests it fails every time. Recover what we can from the
+        # rejected output; otherwise retry in plain JSON mode, where the reply is validated only by
+        # our own Pydantic model (which every reply goes through anyway).
         attempts = 3
         for attempt in range(attempts):
             last = attempt == attempts - 1
             if attempt:
                 time.sleep(GENERATION_RETRY_PAUSE_S * attempt)
+                body = {**body, "response_format": {"type": "json_object"}}
             resp = self._post(httpx, body, headers)
             if resp.status_code == 400:
                 err = _error_body(resp)

@@ -76,3 +76,19 @@ def test_other_400s_are_retried(monkeypatch):
     good = json.dumps({"action": "bills.query", "scope_all": True})
     intent = run(monkeypatch, [FakeResp(400, {"error": {"code": "something_else"}}), ok(good)])
     assert intent.action.value == "bills.query"
+
+
+def test_retries_fall_back_to_plain_json_mode(monkeypatch):
+    monkeypatch.setattr("app.agent.parser.GENERATION_RETRY_PAUSE_S", 0)
+    formats = []
+    responses = iter([FakeResp(400, {"error": {"code": "output_parse_failed", "failed_generation": ""}}),
+                      ok(json.dumps({"action": "bills.query", "scope_all": True}))])
+    p = GroqParser(api_key="test-key", model="test-model")
+
+    def fake_post(httpx, body, headers):
+        formats.append(body["response_format"]["type"])
+        return next(responses)
+
+    monkeypatch.setattr(p, "_post", fake_post)
+    assert p.parse("Show all bills from last month", []).action.value == "bills.query"
+    assert formats == ["json_schema", "json_object"]
