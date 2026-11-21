@@ -1,5 +1,5 @@
 """The 12 required scenarios, end to end (normalize -> policy -> DB -> preview -> confirm -> audit).
-The LLM is replaced by StaticParser holding the intent Gemini is expected to propose, so these
+The LLM is replaced by StaticParser holding the intent the LLM is expected to propose, so these
 tests exercise every layer *except* language understanding (covered by eval/run_eval.py)."""
 from datetime import date
 
