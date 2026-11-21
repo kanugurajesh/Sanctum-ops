@@ -189,6 +189,8 @@ class Orchestrator:
             plan = result
 
             if plan.count == 0:
+                if approval_id is not None:
+                    return self._close_noop_approval(ctx, conn, approval_id, plan)
                 if plan.entity == "access":
                     msg, notes = f"Nothing to change: {plan.notes[0]}", []
                 else:
@@ -473,6 +475,25 @@ class Orchestrator:
         if row["status"] != "pending":
             return f"Approval request #{rid} is already {row['status']}."
         return dict(row)
+
+    def _close_noop_approval(self, ctx: Ctx, conn: Connection, approval_id: int, plan: WritePlan) -> AgentResponse:
+        """The admin approved a request whose change is already in place (e.g. a duplicate of an
+        earlier approved request). There is nothing to preview or confirm, so record the decision
+        and close the request instead of leaving it pending forever."""
+        p = ctx.p
+        conn.execute(update(approval_requests).where(
+            approval_requests.c.id == approval_id, approval_requests.c.status == "pending",
+        ).values(status="approved", decided_by=p.user_id, decided_at=datetime.now(tz=timezone.utc)))
+        msg = (f"Approval request #{approval_id} needs no change: no matching rows in your hospital still need it, "
+               f"so nothing was written. The request is now marked approved.")
+        aid = record(conn, p, request_id=ctx.request_id, raw_query=ctx.raw, decision="executed",
+                     action=Action.APPROVALS_APPROVE.value, parsed_intent=ctx.intent,
+                     resolved_operation=ctx.op.model_dump(mode="json"), reason=msg, rows_affected=0)
+        self._save_turn(ctx, "assistant", msg, conn)
+        body = AnswerBody(title=f"Approval request #{approval_id}: {plan.title}", summary=[msg], notes=plan.notes,
+                          date_range=plan.date_range.label if plan.date_range else None)
+        return AgentResponse(type="answer", request_id=ctx.request_id, intent=ctx.intent, audit_id=aid,
+                             message=msg, answer=body)
 
     def _reject_approval(self, ctx: Ctx, conn: Connection) -> AgentResponse:
         p, op = ctx.p, ctx.op

@@ -20,6 +20,7 @@ INTENTS = {
     "Show all bills": {"action": "bills.query", "scope_all": True},
     "Undo my last change": {"action": "undo"},
     "Approve request 1": {"action": "approvals.approve", "approval_request_id": 1},
+    "Approve request 2": {"action": "approvals.approve", "approval_request_id": 2},
     "Remove inventory edit access from Ravi":
         {"action": "access.revoke", "target_user_name": "Ravi", "permission": "inventory.update"},
     "Update quantities": {"action": "inventory.update", "quantity_op": "set", "quantity_value": 3},
@@ -225,6 +226,30 @@ def test_billing_manager_over_limit_routes_to_admin(orch, fresh_db):
     n = pv.preview.rows_affected
     assert orch.confirm(admin, pv.preview.operation_id, typed_count=n).type == "executed"
     assert owner_scalar("SELECT status FROM approval_requests WHERE id=1") == "approved"
+
+
+def test_approving_already_applied_request_closes_it(orch, fresh_db):
+    """Two identical requests: once #1 is applied, #2 has nothing left to change. Approving it
+    must say so and close it, not leave it pending forever."""
+    bm = principal(BILLING_A)
+    for _ in range(2):
+        r = orch.handle(bm, "Give 20% discount on all bills from last month")
+        sugg = [s for s in r.refusal.suggestions if s.kind == "request_approval"][0]
+        orch.request_approval(bm, sugg.audit_id)
+
+    admin = principal(ADMIN_A)
+    pv = orch.handle(admin, "Approve request 1")
+    orch.confirm(admin, pv.preview.operation_id, typed_count=pv.preview.rows_affected)
+
+    pending_before = owner_scalar("SELECT count(*) FROM pending_operations")
+    out = orch.handle(admin, "Approve request 2")
+    assert out.type == "answer" and "Approval request #2" in out.message
+    assert owner_scalar("SELECT status FROM approval_requests WHERE id=2") == "approved"
+    assert owner_scalar("SELECT count(*) FROM pending_operations") == pending_before   # nothing to confirm
+    assert owner_scalar("SELECT action FROM audit_log WHERE id=:i", i=out.audit_id) == "approvals.approve"
+
+    again = orch.handle(admin, "Approve request 2")
+    assert "already approved" in again.message
 
 
 def test_billing_manager_cannot_approve_own_request(orch, fresh_db):
