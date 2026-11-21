@@ -59,13 +59,44 @@ The demo is scripted with Playwright ([`scripts/demo`](scripts/demo)), so it can
 
 ## Quick start
 
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/) with Compose, and a free
+[Groq API key](https://console.groq.com/keys) (or a [Gemini key](https://aistudio.google.com/apikey) with `LLM_PROVIDER=gemini`).
+
 ```bash
+git clone https://github.com/kanugurajesh/Sanctum-ops.git
+cd Sanctum-ops
 cp .env.example .env            # then put your GROQ_API_KEY in .env
 docker compose up -d --build    # db + api (runs migrations) + web
 docker compose exec api python -m app.seed
 ```
 
 Open **http://localhost:8080**. Pick any user on the left (all passwords are `demo123`). API docs: http://localhost:8000/docs.
+
+### Running without Docker (for development)
+
+Needs Python 3.12+ and Node.js 20.19+ (or 22.12+). Postgres still runs in Docker here; any Postgres 16 on
+`localhost:5433` with user `hms_owner` / `hms_owner_pw` and database `hms` works too.
+
+```bash
+docker compose up -d db                       # Postgres only, on localhost:5433
+
+# backend (terminal 1)
+cd backend
+python -m venv .venv
+source .venv/bin/activate                     # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp ../.env .env                               # settings are read from the current directory
+python -m app.db.migrate                      # schema, RLS policies, hms_app role
+python -m app.seed                            # demo data
+uvicorn app.main:app --reload --port 8000
+
+# frontend (terminal 2)
+cd frontend
+npm install
+npm run dev                                   # http://localhost:5173, proxies /api to :8000
+```
+
+Tests run the same way from `backend/` with `pytest` (they create and use a separate `hms_test` database).
 
 | Command | What it does |
 |---|---|
