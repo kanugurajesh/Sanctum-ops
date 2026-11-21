@@ -341,6 +341,11 @@ Language understanding is measured separately with the real model: `python -m ev
   Undo covers only the user's most recent change, and only while nobody has touched those rows since.
 - Language coverage is the supported operations only (inventory query/update/delete, bill query/discount/status,
   users and access, undo, approvals). Anything else is refused as "not supported", never improvised.
+- The spec's matrix defines 8 permissions but asks for 12+ seeded, so four are added: `bills.delete` (granted to
+  no role, per scenario 11), `audit.read` (admin; gates the hospital-wide audit log), and `inventory.create` /
+  `bills.create`. No agent action performs a create. Those two codes exist only so refusals can name the exact
+  permission: a doctor asking to add an item is told they lack `inventory.create`, while an admin or pharmacist
+  is told the operation is not supported yet.
 - The demo login has no real password policy and the role switcher endpoint exposes the user directory
   (disabled with `DEMO_MODE=false`).
 - See [DESIGN_NOTE.md](DESIGN_NOTE.md) for the three ways this can still go wrong and what to do next:
