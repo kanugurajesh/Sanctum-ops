@@ -96,19 +96,36 @@ def _roles_text(p: Principal) -> str:
 
 # ---------------------------------------------------------------- tenant
 
-_GENERIC_SELF = {"our hospital", "this hospital", "my hospital", "here", "own hospital", "our clinic", "this clinic"}
-_FILLER = {"hospital", "clinic", "the", "at", "in", "of", "multispecialty"}
+_GENERIC_SELF = {"our hospital", "this hospital", "my hospital", "here", "own hospital", "our clinic", "this clinic",
+                 # Hinglish / romanised Telugu
+                 "hamara hospital", "hamare hospital", "apna hospital", "apne hospital", "yahan",
+                 "mana hospital", "maa hospital", "mana clinic", "maa clinic", "ikkada"}
+_FILLER = {"hospital", "clinic", "the", "at", "in", "of", "multispecialty", "mein", "me", "lo", "ka", "ki", "ke"}
+# Non-Latin words that may appear around a hospital name ("హాస్పిటల్ B లో"). Any OTHER non-Latin
+# word could be a hospital name we cannot match, so it makes the mention count as foreign.
+_NATIVE_FILLER = {"హాస్పిటల్", "ఆసుపత్రి", "ఆస్పత్రి", "క్లినిక్", "లో", "అస్పతాల్",
+                  "अस्पताल", "हॉस्पिटल", "क्लिनिक", "में", "का", "की", "के"}
 
 
 def _tokens(s: str) -> set[str]:
     return {t for t in re.split(r"[^a-z0-9]+", s.lower()) if t}
 
 
+def _unmatched_native_words(s: str) -> bool:
+    # Split on whitespace/punctuation only: \w does not cover Indic vowel signs and would cut words up.
+    words = re.split(r"[\s,.;:!?()\[\]/'\"\-]+", s)
+    return any(w not in _NATIVE_FILLER for w in words if w and not w.isascii())
+
+
 def mentions_own_hospital(mention: str, p: Principal) -> bool:
     """Does a hospital name mentioned in the request refer to the user's own hospital?
-    Anything we cannot positively match to the user's own hospital is treated as foreign."""
-    m = " ".join(sorted(_tokens(mention)))
-    if not m or mention.strip().lower() in _GENERIC_SELF:
+    Anything we cannot positively match to the user's own hospital is treated as foreign,
+    including names in a script we cannot match (e.g. 'లోటస్'): fail closed."""
+    if mention.strip().lower() in _GENERIC_SELF:
+        return True
+    if _unmatched_native_words(mention):
+        return False
+    if not _tokens(mention):
         return True
     mt = _tokens(mention) - _FILLER
     if not mt:

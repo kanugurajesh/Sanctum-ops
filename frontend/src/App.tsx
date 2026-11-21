@@ -253,11 +253,17 @@ function examplesFor(roles: string[]): string[] {
       "Undo my last change",
     );
   if (roles.includes("billing_manager"))
-    add("Give 20% discount on all bills from last month", "Make me an admin", "Show pending bills from this week");
+    add(
+      "Give 20% discount on all bills from last month",
+      "Last month bills ki 20% discount ivvu",
+      "Make me an admin",
+      "Show pending bills from this week",
+    );
   if (roles.includes("pharmacist"))
     add(
       "Bulk update the entire inventory with quantity 5",
       "Show items expiring in the next 30 days",
+      "వచ్చే 30 రోజుల్లో expire అయ్యే items చూపించు",
       "Summarise low-stock items",
     );
   if (roles.includes("front_desk")) add("Set all inventory quantities to 5", "Show my bills from last month");

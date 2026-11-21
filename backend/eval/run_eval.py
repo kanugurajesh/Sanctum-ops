@@ -1,8 +1,10 @@
-"""Eval harness: runs labelled queries through the REAL pipeline (Gemini + policy + DB) and reports
+"""Eval harness: runs labelled queries through the REAL pipeline (LLM + policy + DB) and reports
 intent accuracy, false-allow rate and false-deny rate. Uses LLM_PROVIDER (groq | gemini). Previews are cancelled, never confirmed,
 so running it changes no business data.
 
-    docker compose exec api python -m eval.run_eval [--limit N] [--out eval/results.json]
+    docker compose exec api python -m eval.run_eval [--limit N] [--lang en,te,hi] [--out eval/results.json]
+
+Queries without a `lang` label are English (en); te = Telugu (script or romanised), hi = Hinglish.
 """
 from __future__ import annotations
 
@@ -38,6 +40,7 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--out", default=str(HERE / "results.json"))
     ap.add_argument("--delay", type=float, default=0.0, help="seconds between LLM calls (rate limits)")
+    ap.add_argument("--lang", default="", help="comma-separated languages to run, e.g. te,hi (default: all)")
     args = ap.parse_args()
 
     s = get_settings()
@@ -46,6 +49,11 @@ def main() -> int:
         return 2
 
     cases = yaml.safe_load((HERE / "queries.yaml").read_text(encoding="utf-8"))
+    for c in cases:
+        c.setdefault("lang", "en")
+    if args.lang:
+        langs = {x.strip() for x in args.lang.split(",") if x.strip()}
+        cases = [c for c in cases if c["lang"] in langs]
     if args.limit:
         cases = cases[: args.limit]
     orch = Orchestrator(make_parser())
@@ -61,7 +69,7 @@ def main() -> int:
         got_action = (r.intent or {}).get("action")
         code = r.refusal.code if r.refusal else None
         return {
-            "query": c["query"], "user": c["user"], "roles": list(p.roles),
+            "query": c["query"], "lang": c["lang"], "user": c["user"], "roles": list(p.roles),
             "expected_action": c["action"], "got_action": got_action,
             "expected": expected, "got": r.type, "expected_code": c.get("code"), "got_code": code,
             "intent_ok": got_action == c["action"],
@@ -106,6 +114,11 @@ def main() -> int:
         "false_allow_rate": round(sum(r["false_allow"] for r in refusals) / max(len(refusals), 1), 3),
         "false_deny_rate": round(sum(r["false_deny"] for r in permitted) / max(len(permitted), 1), 3),
         "false_allows": [r["query"] for r in results if r["false_allow"]],
+        "outcome_accuracy_by_lang": {
+            lang: round(sum(r["outcome_ok"] for r in rs) / len(rs), 3)
+            for lang in sorted({r["lang"] for r in results})
+            for rs in [[r for r in results if r["lang"] == lang]]
+        },
         "still_rate_limited": sum(r["rate_limited"] for r in results),
         "provider": s.llm_provider,
         "model": s.groq_model if s.llm_provider.lower() == "groq" else s.gemini_model,

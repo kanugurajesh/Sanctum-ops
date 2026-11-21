@@ -1,6 +1,7 @@
 # Sanctum Ops — Permission-Aware Operations Agent for Hospitals
 
-Hospital staff type instructions in plain English ("Give 20% discount on all bills from last month").
+Hospital staff type instructions in plain English, Hinglish or Telugu ("Give 20% discount on all bills from last month",
+"Last month bills ki 20% discount ivvu").
 The agent answers, asks a clarifying question, refuses with a reason, or shows a **dry-run preview**
 that runs only after the user confirms. It can never do something the logged-in user couldn't do
 themselves, and every attempt is written to an append-only audit log.
@@ -69,8 +70,8 @@ Open **http://localhost:8080**. Pick any user on the left (all passwords are `de
 | Command | What it does |
 |---|---|
 | `docker compose exec api python -m app.seed` | Reset all data to the deterministic demo seed |
-| `docker compose exec api pytest` | 83 tests: policy (pure), the 12 scenarios end to end, write safety, RLS |
-| `docker compose exec api python -m eval.run_eval` | 59 labelled queries through the real LLM |
+| `docker compose exec api pytest` | 117 tests: policy (pure), the 12 scenarios end to end, write safety, RLS, Telugu/Hinglish |
+| `docker compose exec api python -m eval.run_eval` | 79 labelled queries (59 English, 20 Telugu/Hinglish) through the real LLM |
 
 ### Demo users
 
@@ -216,10 +217,26 @@ The LLM sees only the user's own words and our own clarifying questions — neve
 - **Approval routing** — a billing manager refused at 20% can click *Request admin approval*; an admin sees it
   in the Approvals tab or says "approve request 1", gets a normal preview (checked against the *admin's*
   limits), and confirms.
-- **Eval harness** — `eval/queries.yaml` (60 labelled queries incl. paraphrases and injection attempts),
-  `eval/run_eval.py` reports intent accuracy, outcome accuracy, false-allow and false-deny rates.
+- **Eval harness** — `eval/queries.yaml` (79 labelled queries incl. paraphrases, injection attempts and
+  Telugu/Hinglish), `eval/run_eval.py` reports intent accuracy, outcome accuracy (also per language),
+  false-allow and false-deny rates. `--lang te,hi` runs only the Telugu/Hinglish set.
 - **UI** — chat with role switcher, typed result cards, live audit log and approvals panel.
-- Not implemented: Telugu/Hinglish input (out of scope by choice).
+- **Telugu / Hinglish input** — "Last month bills ki 20% discount ivvu" gets the same intent, the same checks
+  and the same preview as the English version. Telugu script, romanised Telugu, Hinglish and mixes all work.
+  How:
+  - The prompt (`agent/prompts.py`) has a short LANGUAGE section and six Telugu/Hinglish few-shots.
+  - The model must write every field in Latin script ("రవి" → `Ravi`, "లోటస్ క్లినిక్" → `Lotus Clinic`), so name
+    lookup and the tenant check work unchanged.
+  - Nothing else changes: the intent schema, policy and execution layers never see the language.
+  - The tenant check fails closed: if the model copies a hospital name in Telugu or Devanagari script, the request
+    is refused as cross-tenant, because the name cannot be matched to the user's own hospital
+    (`policy/engine.py:mentions_own_hospital`).
+  - Tests: `tests/test_multilingual.py` (no LLM) checks that Telugu/Hinglish requests get the same
+    previews (rows, IST dates, ₹ impact) and refusals as English and that the audit log keeps the original text.
+  - Replies stay in English.
+  - Live result (`--lang te,hi`, Groq `openai/gpt-oss-120b`): 20/20 correct outcomes, 0 false allows, 0 false
+    denies. One query first failed with a network `ConnectError` and passed when rerun. The English set
+    (`--lang en`) still scores 59/59 outcomes (intent accuracy 0.983) with 0 false allows after the prompt change.
 
 ---
 
@@ -273,6 +290,9 @@ Language understanding is measured separately with the real model: `python -m ev
 - On Groq's free tier the model allows ~3 requests/minute sustained (8k tokens/min, ~2.4k tokens per request,
   mostly the system prompt and few-shot examples). The parser waits out short rate-limit windows (≤20 s) and
   otherwise returns a clear "rate-limited, try again" message. Nothing is ever written on an LLM failure.
+- Replies are in English even when the request is in Telugu or Hinglish. Telugu/Hinglish accuracy comes from the
+  model plus six few-shots; there is no translation layer, so unusual dialect or spelling can still be misread
+  (it then hits the same policy checks as any other intent).
 - Language coverage is the supported operations only (inventory query/update/delete, bill query/discount/status,
   users and access, undo, approvals). Anything else is refused as "not supported", never improvised.
 - The demo login has no real password policy and the role switcher endpoint exposes the user directory

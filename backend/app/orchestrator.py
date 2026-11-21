@@ -599,7 +599,8 @@ class Orchestrator:
         if op.bills and op.bills.bill_date:
             dr = op.bills.bill_date
             return f"Give {new}% discount on all bills dated from {dr.start.isoformat()} to {dr.end.isoformat()}"
-        out, n = re.subn(r"\d+(?:\.\d+)?\s*(%|percent)", f"{new}%", ctx.raw, count=1)
+        out, n = re.subn(r"\d+(?:\.\d+)?\s*(%|percent|pct|శాతం|प्रतिशत|pratishat|shatam)", f"{new}%",
+                         ctx.raw, count=1, flags=re.IGNORECASE)
         return out if n else None
 
     def _in_tx(self, ctx: Ctx, conn: Connection | None, fn) -> int:

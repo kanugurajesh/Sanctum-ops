@@ -53,6 +53,19 @@ FIELDS
 - mentioned_hospital: if the request names any hospital or clinic (e.g. "at Hospital B",
   "for Lotus clinic"), copy the name verbatim. Leave empty if none is named.
 
+LANGUAGE
+Users may write in English, Hinglish (Hindi in Latin script), Telugu (Telugu script or romanised),
+or any mix. Read them exactly like the English equivalent and output the SAME intent the English
+request would get. Every string field must be in English / Latin script: transliterate people's
+names (రవి -> "Ravi"), item names (పారాసెటమాల్ -> "paracetamol"), categories and hospital names
+(లోటస్ క్లినిక్ -> "Lotus Clinic", హాస్పిటల్ బి -> "Hospital B"). Common words:
+last month = gatha nela / pichhle mahine / గత నెల; this week = ee vaaram / is hafte / ఈ వారం;
+today = ee roju / aaj / ఈ రోజు; next N days = next N rojullo / agle N din / వచ్చే N రోజుల్లో;
+all = anni / saare / sab / అన్ని; give = ivvu / do / de do / ఇవ్వు; remove = teeseyyi / hata do / తీసేయి;
+show = chupinchu / dikhao / చూపించు; delete = delete cheyyi / mita do / తొలగించు;
+me/my = nenu, naa, naaku / main, mera, mujhe / నా, నాకు, నేను (-> target_self=true);
+our own hospital = mana / maa / hamara hospital (-> leave mentioned_hospital empty).
+
 CONVERSATION
 Earlier turns may contain a request and a clarifying question from the assistant. If the
 latest message answers that question, output the COMPLETE intent combining the original
@@ -81,4 +94,17 @@ FEW_SHOTS: list[tuple[str, str]] = [
      '{"action":"inventory.query","low_stock":true,"mode":"summary"}'),
     ("Delete all bills",
      '{"action":"bills.delete","scope_all":true,"requested_permission":"bills.delete"}'),
+    # Telugu / Hinglish: same intents as the English versions, string values in Latin script.
+    ("Last month bills ki 20% discount ivvu",
+     '{"action":"bills.discount","scope_all":true,"discount_pct":20,"date_range":{"preset":"last_month"}}'),
+    ("Pichhle mahine ke saare bills pe 20% discount de do",
+     '{"action":"bills.discount","scope_all":true,"discount_pct":20,"date_range":{"preset":"last_month"}}'),
+    ("రవి కి inventory edit access తీసేయి",
+     '{"action":"access.revoke","target_user_name":"Ravi","permission":"inventory.update"}'),
+    ("వచ్చే 30 రోజుల్లో expire అయ్యే items చూపించు",
+     '{"action":"inventory.query","date_range":{"preset":"next_n_days","n":30}}'),
+    ("లోటస్ క్లినిక్ లో paracetamol stock 100 చేయి",
+     '{"action":"inventory.update","item_name_contains":"paracetamol","quantity_op":"set","quantity_value":100,"mentioned_hospital":"Lotus Clinic"}'),
+    ("Mujhe admin bana do",
+     '{"action":"access.grant","target_self":true,"role":"admin"}'),
 ]

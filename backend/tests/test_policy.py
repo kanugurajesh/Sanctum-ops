@@ -168,6 +168,24 @@ def test_own_hospital_mention_allowed(mention):
     assert policy.check_request(ADMIN, inv_update(mentioned_hospital=mention), CAT).allowed
 
 
+@pytest.mark.parametrize("mention", [
+    "హాస్పిటల్ బి", "లోటస్ కేర్ క్లినిక్", "Hospital B లో", "Lotus ka hospital", "Sunrise లోటస్",
+    "विजयवाड़ा", "Hospital B mein",
+])
+def test_cross_tenant_telugu_hindi_mentions_fail_closed(mention):
+    """Names in a script we cannot match are foreign, even next to the user's own hospital name."""
+    d = policy.check_request(ADMIN, inv_update(mentioned_hospital=mention), CAT)
+    assert not d.allowed and d.code == Code.CROSS_TENANT
+
+
+@pytest.mark.parametrize("mention", [
+    "mana hospital", "hamare hospital", "Sunrise హాస్పిటల్ లో", "Hospital A mein",
+    "హాస్పిటల్",  # just the word "hospital", like English "hospital"
+])
+def test_own_hospital_mention_allowed_telugu_hindi(mention):
+    assert policy.check_request(ADMIN, inv_update(mentioned_hospital=mention), CAT).allowed
+
+
 def test_s9_cross_tenant_message_identical_regardless_of_item():
     a = policy.check_request(ADMIN, inv_update(mentioned_hospital="Hospital B", inventory=InventoryFilter(name_contains="paracetamol")), CAT)
     b = policy.check_request(ADMIN, inv_update(mentioned_hospital="Hospital B", inventory=InventoryFilter(name_contains="unicornium")), CAT)
