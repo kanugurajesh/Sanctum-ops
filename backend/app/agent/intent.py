@@ -1,4 +1,4 @@
-"""The JSON schema the LLM (Groq or Gemini) must fill in. This is a *proposal* only: it carries no identity,
+"""The JSON schema the LLM (Groq, or the optional local Qwen) must fill in. This is a *proposal* only: it carries no identity,
 no role, no hospital id and no SQL. Code validates and converts it into an Operation."""
 from __future__ import annotations
 

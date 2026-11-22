@@ -12,12 +12,9 @@ class Settings(BaseSettings):
     app_database_url: str = "postgresql+psycopg://hms_app:hms_app_pw@localhost:5433/hms"
     app_db_password: str = "hms_app_pw"
 
-    llm_provider: str = "groq"          # 'groq' | 'gemini' | 'qwen'
+    llm_provider: str = "groq"          # 'groq' | 'qwen'
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
-
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
 
     # Optional local model: a fine-tuned Qwen served by Ollama (see training/README.md).
     # host.docker.internal reaches the host's Ollama from inside the api container.

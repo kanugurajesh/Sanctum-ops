@@ -31,75 +31,6 @@ class IntentParser(Protocol):
     def parse(self, text: str, history: list[Turn]) -> ParsedIntent: ...
 
 
-class GeminiParser:
-    def __init__(self, api_key: str | None = None, model: str | None = None):
-        settings = get_settings()
-        self.api_key = api_key or settings.gemini_api_key
-        self.model = model or settings.gemini_model
-        self._client = None
-
-    def _get_client(self):
-        if not self.api_key:
-            raise ParserError("GEMINI_API_KEY is not set. Add it to .env and restart the api container.")
-        if self._client is None:
-            from google import genai
-            from google.genai import types
-            self._client = genai.Client(
-                api_key=self.api_key,
-                http_options=types.HttpOptions(timeout=get_settings().llm_timeout_seconds * 1000),
-            )
-        return self._client
-
-    def parse(self, text: str, history: list[Turn]) -> ParsedIntent:
-        from google.genai import types
-
-        contents: list[types.Content] = []
-        for q, a in FEW_SHOTS:
-            contents.append(types.Content(role="user", parts=[types.Part(text=q)]))
-            contents.append(types.Content(role="model", parts=[types.Part(text=a)]))
-        for t in history[-6:]:
-            role = "user" if t.role == "user" else "model"
-            # Prior assistant turns are wrapped so the model reads them as context, not as JSON examples.
-            body = t.content if t.role == "user" else f"(assistant asked) {t.content}"
-            contents.append(types.Content(role=role, parts=[types.Part(text=body)]))
-        contents.append(types.Content(role="user", parts=[types.Part(text=text[:2000])]))
-
-        config = types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            temperature=0,
-            response_mime_type="application/json",
-            response_schema=ParsedIntent,
-        )
-        resp = None
-        for attempt in range(3):
-            try:
-                resp = self._get_client().models.generate_content(model=self.model, contents=contents, config=config)
-                break
-            except ParserError:
-                raise
-            except Exception as e:  # network, quota, bad key, unknown model...
-                code = getattr(e, "code", None)
-                if code == 429 and attempt < 2:      # rate limited (e.g. free tier: 5 req/min)
-                    time.sleep(6 * (attempt + 1))
-                    continue
-                if code == 429:
-                    raise ParserError("The language model is rate-limited right now (API quota). "
-                                      "Please wait a few seconds and try again.") from e
-                if code == 404:
-                    raise ParserError(f"Gemini model '{self.model}' was not found. Set GEMINI_MODEL in .env "
-                                      "to an available model (e.g. gemini-2.5-flash).") from e
-                raise ParserError(f"The language model could not be reached ({type(e).__name__}). "
-                                  "Please try again.") from e
-
-        parsed = getattr(resp, "parsed", None)
-        if isinstance(parsed, ParsedIntent):
-            return parsed
-        try:
-            return ParsedIntent.model_validate(json.loads(resp.text or "{}"))
-        except (ValidationError, json.JSONDecodeError) as e:
-            raise ParserError("I couldn't understand that request. Could you rephrase it?") from e
-
-
 def _inline_refs(schema: dict) -> dict:
     """Pydantic emits $defs/$ref; inline them so any JSON-schema consumer accepts the schema."""
     defs = schema.get("$defs", {})
@@ -314,13 +245,11 @@ def _salvage(failed_generation: str | None) -> ParsedIntent | None:
 
 def make_parser() -> IntentParser:
     provider = get_settings().llm_provider.lower()
-    if provider == "gemini":
-        return GeminiParser()
     if provider == "groq":
         return GroqParser()
     if provider == "qwen":
         return QwenParser()
-    raise ValueError(f"Unknown LLM_PROVIDER {provider!r} (use 'groq', 'gemini' or 'qwen')")
+    raise ValueError(f"Unknown LLM_PROVIDER {provider!r} (use 'groq' or 'qwen')")
 
 
 class StaticParser:

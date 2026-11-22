@@ -6,11 +6,11 @@ The agent answers, asks a clarifying question, refuses with a reason, or shows a
 that runs only after the user confirms. It can never do something the logged-in user couldn't do
 themselves, and every attempt is written to an append-only audit log.
 
-**The LLM proposes, code decides.** The LLM (Groq `openai/gpt-oss-120b` by default, Gemini optional) only turns text into a typed intent. Permissions, limits,
+**The LLM proposes, code decides.** The LLM (Groq `openai/gpt-oss-120b` by default, optional local Qwen) only turns text into a typed intent. Permissions, limits,
 hospital scoping, previews and execution are all plain Python + Postgres, and they are unit-tested
 without the LLM.
 
-Stack: Python 3.12 · FastAPI · PostgreSQL 16 (row-level security) · Groq `openai/gpt-oss-120b` (or Gemini) · React + Vite + Tailwind.
+Stack: Python 3.12 · FastAPI · PostgreSQL 16 (row-level security) · Groq `openai/gpt-oss-120b` · React + Vite + Tailwind.
 
 ![Sanctum Ops tour](docs/demo-tour.gif)
 
@@ -67,7 +67,7 @@ The demo is scripted with Playwright ([`scripts/demo`](scripts/demo)), so it can
 ## Quick start
 
 **Prerequisites:** [Docker](https://docs.docker.com/get-docker/) with Compose, and a free
-[Groq API key](https://console.groq.com/keys) (or a [Gemini key](https://aistudio.google.com/apikey) with `LLM_PROVIDER=gemini`).
+[Groq API key](https://console.groq.com/keys).
 
 ```bash
 git clone https://github.com/kanugurajesh/Sanctum-ops.git
@@ -327,10 +327,9 @@ Language understanding is measured separately with the real model: `python -m ev
 
 | Variable | Default | |
 |---|---|---|
-| `LLM_PROVIDER` | `groq` | `groq`, `gemini`, or `qwen` (optional local model) |
+| `LLM_PROVIDER` | `groq` | `groq` or `qwen` (optional local model) |
 | `GROQ_API_KEY` | — | required when `LLM_PROVIDER=groq` |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | any Groq model with JSON-schema output |
-| `GEMINI_API_KEY` / `GEMINI_MODEL` | — / `gemini-2.5-flash` | only when `LLM_PROVIDER=gemini` |
 | `QWEN_BASE_URL` / `QWEN_MODEL` | `http://host.docker.internal:11434/v1` / `hms-intent-qwen` | only when `LLM_PROVIDER=qwen`; see [training/README.md](training/README.md) |
 | `JWT_SECRET` | dev value | change outside local demos |
 | `DEMO_MODE` | `true` | enables the role switcher and shared demo password; set `false` before real use |
@@ -343,8 +342,7 @@ Language understanding is measured separately with the real model: `python -m ev
   model plus six few-shots; there is no translation layer, so unusual dialect or spelling can still be misread.
   A misread intent hits the same policy checks as any other, but if the user is allowed to do the misread
   thing, only the (English) preview stands between it and a commit.
-- Gemini (`LLM_PROVIDER=gemini`) is supported, but the eval was not re-run with it after the Telugu/Hinglish
-  prompt change. All accuracy numbers in this README are from Groq `openai/gpt-oss-120b`.
+- All accuracy numbers in this README are from Groq `openai/gpt-oss-120b`.
 - The ₹ impact is shown in every preview but not limited: guards count rows and percentages, not rupees.
   Undo covers only the user's most recent change, and only while nobody has touched those rows since.
 - Language coverage is the supported operations only (inventory query/update/delete, bill query/discount/status,
@@ -364,7 +362,7 @@ Language understanding is measured separately with the real model: `python -m ev
 
 ```
 backend/
-  app/agent/        Groq + Gemini (+ optional local Qwen) parsers, intent schema, prompts
+  app/agent/        Groq (+ optional local Qwen) parsers, intent schema, prompts
   app/operations/   Operation model, normalize (intent → operation), IST dates
   app/policy/       permissions math, policy engine (pure)
   app/execution/    query builders, dry-run plans, executor, read answers, directory

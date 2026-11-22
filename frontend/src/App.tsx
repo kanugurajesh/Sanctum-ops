@@ -20,7 +20,6 @@ export default function App() {
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
   const [llmReady, setLlmReady] = useState<boolean | null>(null);
-  const [llmProvider, setLlmProvider] = useState("groq");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<"users" | "activity" | null>(null);
 
@@ -39,7 +38,7 @@ export default function App() {
         setCurrentId(u.find((x) => x.user_id === saved)?.user_id ?? u[0]?.user_id ?? null);
       })
       .catch((e) => setLoadError(`Can't reach the API (${e.message}). Start the backend and run the seed script, then reload.`));
-    api.health().then((h) => { setLlmReady(h.llm_configured); setLlmProvider(h.llm_provider); }).catch(() => setLlmReady(null));
+    api.health().then((h) => { setLlmReady(h.llm_configured); }).catch(() => setLlmReady(null));
   }, []);
 
   // Log in as the selected demo user (the token is the only identity the backend trusts).
@@ -204,7 +203,7 @@ export default function App() {
             <AlertTriangle size={16} className="mt-0.5 shrink-0 text-caution" />
             <span>
               The language model isn't connected. Add{" "}
-              <code className="font-mono">{llmProvider === "gemini" ? "GEMINI_API_KEY" : "GROQ_API_KEY"}</code> to{" "}
+              <code className="font-mono">GROQ_API_KEY</code> to{" "}
               <code className="font-mono">.env</code> and restart the api container.
             </span>
           </div>

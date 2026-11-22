@@ -1,6 +1,6 @@
 # Optional: a fine-tuned local intent parser (Qwen2.5-0.5B-Instruct)
 
-Groq stays the default and Gemini stays available. This folder builds a **third, optional provider**
+Groq stays the default. This folder builds a **second, optional provider**
 (`LLM_PROVIDER=qwen`): a small model fine-tuned (SFT, LoRA) to emit the same `ParsedIntent` JSON. It runs
 locally through Ollama.
 

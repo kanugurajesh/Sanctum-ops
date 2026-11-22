@@ -9,8 +9,7 @@ _app = os.environ.get("APP_DATABASE_URL", "postgresql+psycopg://hms_app:hms_app_
 TEST_OWNER_URL = re.sub(r"/[^/]+$", "/hms_test", _owner)
 os.environ["OWNER_DATABASE_URL"] = TEST_OWNER_URL
 os.environ["APP_DATABASE_URL"] = re.sub(r"/[^/]+$", "/hms_test", _app)
-os.environ["GEMINI_API_KEY"] = ""          # make sure nothing can reach an LLM
-os.environ["GROQ_API_KEY"] = ""
+os.environ["GROQ_API_KEY"] = ""            # make sure nothing can reach an LLM
 
 import psycopg  # noqa: E402
 import pytest  # noqa: E402

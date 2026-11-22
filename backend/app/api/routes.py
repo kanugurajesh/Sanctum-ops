@@ -137,7 +137,7 @@ def list_audit(limit: int = 50, p: Principal = Depends(get_principal)) -> list[d
 @router.get("/health")
 def health() -> dict:
     s = get_settings()
-    key = s.groq_api_key if s.llm_provider.lower() == "groq" else s.gemini_api_key
-    model = s.groq_model if s.llm_provider.lower() == "groq" else s.gemini_model
-    return {"ok": True, "llm_configured": bool(key), "llm_provider": s.llm_provider, "llm_model": model,
+    is_qwen = s.llm_provider.lower() == "qwen"     # local model, no API key
+    model = s.qwen_model if is_qwen else s.groq_model
+    return {"ok": True, "llm_configured": is_qwen or bool(s.groq_api_key), "llm_provider": s.llm_provider, "llm_model": model,
             "time": datetime.now(tz=timezone.utc).isoformat()}

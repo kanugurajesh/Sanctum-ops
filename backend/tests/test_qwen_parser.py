@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.agent.parser import (
-    FEW_SHOTS, INTENT_JSON_SCHEMA, GeminiParser, GroqParser, ParserError, QwenParser, Turn, make_parser,
+    FEW_SHOTS, INTENT_JSON_SCHEMA, GroqParser, ParserError, QwenParser, Turn, make_parser,
 )
 from app.agent.prompts import QWEN_SYSTEM_PROMPT, SYSTEM_PROMPT
 from app.config import get_settings
@@ -87,7 +87,7 @@ def test_qwen_unreachable_server_is_a_friendly_error(monkeypatch):
         p.parse("anything", [])
 
 
-@pytest.mark.parametrize("provider,cls", [("groq", GroqParser), ("gemini", GeminiParser), ("qwen", QwenParser)])
+@pytest.mark.parametrize("provider,cls", [("groq", GroqParser), ("qwen", QwenParser)])
 def test_make_parser_selects_provider(monkeypatch, provider, cls):
     monkeypatch.setattr(get_settings(), "llm_provider", provider)
     assert type(make_parser()) is cls
